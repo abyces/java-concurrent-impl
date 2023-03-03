@@ -1,24 +1,33 @@
 package concurrent.locks;
 
+import sun.misc.Unsafe;
+
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
 public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer {
 
     /**
      * CLH node
      */
     abstract static class Node {
-        volatile Node prev;
-        volatile Node next;
+        AtomicReference<Node> prev;
+        AtomicReference<Node> next;
+        AtomicInteger status;
         Thread waiter;
-        volatile int status;
+
+//        volatile Node prev;
+//        volatile Node next;
+//        volatile int status;
 
         final boolean casPrev(Node c, Node v) {
-            return false;
+            return prev.compareAndSet(c, v);
         }
         final boolean casNext(Node c, Node v) {
-            return false;
+            return next.compareAndSet(c, v);
         }
         final int getAndUnsetStatus(int v) {
-            return 0;
+            return status.getAndSet(0);
         }
         final void setPrevRelaxed(Node p) {
 
@@ -28,19 +37,22 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
     }
 
     private transient volatile Node head;
+
     private transient volatile Node tail;
-    private volatile int state;
+
+//    private volatile int state;
+    private AtomicInteger state;
 
     protected final int getState() {
-        return state;
+        return state.get();
     }
 
     protected final void setState(int state) {
-        this.state = state;
+        this.state.set(state);
     }
 
     protected final boolean compareAndSetState(int expect, int update) {
-        return false;
+        return state.compareAndSet(expect, update);
     }
 
     final void enqueue(Node node) {
@@ -69,8 +81,14 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
     protected boolean tryRelease(int arg) { throw new UnsupportedOperationException(); }
 
     public final void acquire(int arg) {
+        /** jdk 17 */
         if (!tryAcquire(arg))
             acquire(null, arg, false, false, false, 0L);
+        /** jdk 1.8
+         *      if (!tryAcquire(arg) &&
+         *          acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
+         *          selfInterrupt();
+         */
     }
 
     public final boolean release() { return false; }
@@ -81,5 +99,8 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
 
     public final boolean hasQueuedPredecessors() { return false; }
 
+
+    // Unsafe
+    private static final Unsafe U = Unsafe.getUnsafe();
 
 }

@@ -17,6 +17,7 @@ public class ReentrantLock implements Lock {
             if (!initialTryLock())
                 acquire(1);
         }
+
     }
 
     static final class NonfairSync extends Sync {
@@ -32,6 +33,15 @@ public class ReentrantLock implements Lock {
             } else {
                 return false;
             }
+        }
+
+        @Override
+        protected boolean tryAcquire(int acquires) {
+            if (getState() == 0 && compareAndSetState(0, acquires)) {
+                setExclusiveOwnerThread(Thread.currentThread());
+                return true;
+            }
+            return false;
         }
     }
 
@@ -49,6 +59,16 @@ public class ReentrantLock implements Lock {
             } else if (getExclusiveOwnerThread() == currentThread) {
                 // 资源还是处于被占有状态，同时是自己占有
                 setState(c + 1); // 源码判断了溢出的情况
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        protected boolean tryAcquire(int acquires) {
+            if (getState() == 0 && !hasQueuedPredecessors() && compareAndSetState(0, acquires)) {
+                // acquire only if thread is first waiter or empty
+                setExclusiveOwnerThread(Thread.currentThread());
                 return true;
             }
             return false;
