@@ -18,6 +18,23 @@ public class ReentrantLock implements Lock {
                 acquire(1);
         }
 
+        protected final boolean tryRelease(int releases) {
+            int c = getState() - releases;
+            if (getExclusiveOwnerThread() != Thread.currentThread())
+                throw new IllegalArgumentException();
+
+            // AQS::getState(), state == 0 才说明资源已经被释放，而这是一个可重入锁
+            boolean free = (c == 0);
+            if (free)
+                setExclusiveOwnerThread(null);
+            setState(c);
+            return free;
+        }
+
+        protected final boolean isHeldExclusively() {
+            return getExclusiveOwnerThread() == Thread.currentThread();
+        }
+
     }
 
     static final class NonfairSync extends Sync {
@@ -95,6 +112,6 @@ public class ReentrantLock implements Lock {
 
     @Override
     public boolean unlock() {
-        return false;
+        return sync.release(1);
     }
 }

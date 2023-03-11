@@ -4,8 +4,11 @@ import sun.misc.Unsafe;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 
 public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchronizer {
+
+    static final int WAITING = 1;
 
     /**
      * CLH node
@@ -15,10 +18,6 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
         AtomicReference<Node> next;
         AtomicInteger status;
         Thread waiter;
-
-//        volatile Node prev;
-//        volatile Node next;
-//        volatile int status;
 
         final boolean casPrev(Node c, Node v) {
             return prev.compareAndSet(c, v);
@@ -63,6 +62,17 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
         return false;
     }
 
+    private static void signalNext(Node h) {
+        Node s;
+        if (h != null) {
+            s = h.next.get();
+            if (s != null && s.status.get() != 0) {
+                s.getAndUnsetStatus(WAITING);
+                LockSupport.unpark(s.waiter);
+            }
+        }
+    }
+
     /**
      * Main acquire method invoked by all exported acquire methods.
      * @param node
@@ -73,7 +83,72 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
      * @param time
      * @return
      */
-    final int acquire(Node node, int arg, boolean shared, boolean interruptible, boolean timed, long time) { return 0; }
+    final int acquire(Node node, int arg, boolean shared, boolean interruptible, boolean timed, long time) {
+        Thread currentThread = Thread.currentThread();
+        byte spins = 0, postSpins = 0;
+        boolean first = false;
+        Node pred = null;
+
+        for (;;) {
+            // Check if node now first
+            //      if so, ensure head stable, else ensure valid predecessor
+            if (!first && (pred = (node == null) ? null : node.prev.get()) != null && !(first = (head == pred))) {
+                if (pred.status.get() < 0) {
+                    cleanQueue();
+                    continue;
+                } else if (pred.prev == null) {
+                    Thread.onSpinWait();
+                    continue;
+                }
+            }
+            // if node is first or not yet enqueued, try acquiring
+            if (first || pred == null) {
+                // 暂时省略了 tryAcquireShared
+                boolean acquired = tryAcquire(arg);
+                if (acquired) {
+                    if (first) {
+                        node.prev = null;
+                        head = node;
+                        pred.next = null;
+                        node.waiter = null;
+                    }
+                    return 1;
+                }
+            }
+            // else if node not yet created, create it
+            if (node == null) {
+                // allocate
+                node = new ExclusiveNode();
+            } else if (pred == null) {
+                // try to enq
+                node.waiter = currentThread;
+                Node t = tail;
+                node.setPrevRelaxed(t);
+                if (t == null)
+                    tryInitializeHead();
+                else if (!casTail(t, node))
+                    node.setPrevRelaxed(null);
+                else
+                    t.next.set(node);
+            } else if (first && spins != 0) {
+                --spins;
+                Thread.onSpinWait();
+            } else if (node.status.get() == 0) {
+                node.status.set(WAITING);
+            } else {
+                long nanos;
+                spins = postSpins = (byte)((postSpins << 1) | 1);
+                if (!timed)
+                    LockSupport.park(this);
+                else if ((nanos = time - System.nanoTime()) > 0L)
+                    LockSupport.parkNanos(this, nanos);
+                else
+                    break;
+                node.clearStatus();
+            }
+            return cancelAcquire(node, false, interruptible);
+        }
+    }
 
 
     // Main exported methods
@@ -91,7 +166,13 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
          */
     }
 
-    public final boolean release() { return false; }
+    public final boolean release(int arg) {
+        if (tryRelease(arg)) {
+            signalNext(head);
+            return true;
+        }
+        return false;
+    }
 
     public final Thread getFirstQueuedThread() { return null; }
 
