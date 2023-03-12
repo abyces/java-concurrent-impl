@@ -35,6 +35,9 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
         final void clearStatus() {}
     }
 
+    static final class ExclusiveNode extends Node { }
+    static final class SharedNode extends Node { }
+
     private transient volatile Node head;
 
     private transient volatile Node tail;
@@ -53,6 +56,10 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
     protected final boolean compareAndSetState(int expect, int update) {
         return state.compareAndSet(expect, update);
     }
+
+    private boolean casTail(Node c, Node v) { return false; }
+
+    private void tryInitializeHead() {}
 
     final void enqueue(Node node) {
 
@@ -123,7 +130,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
                 // try to enq
                 node.waiter = currentThread;
                 Node t = tail;
-                node.setPrevRelaxed(t);
+                node.setPrevRelaxed(t); // avoid unnecessary fence?
                 if (t == null)
                     tryInitializeHead();
                 else if (!casTail(t, node))
@@ -131,9 +138,11 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
                 else
                     t.next.set(node);
             } else if (first && spins != 0) {
+                // reduce unfairness on re-waits
                 --spins;
                 Thread.onSpinWait();
             } else if (node.status.get() == 0) {
+                // enable signal and recheck
                 node.status.set(WAITING);
             } else {
                 long nanos;
@@ -146,10 +155,13 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
                     break;
                 node.clearStatus();
             }
-            return cancelAcquire(node, false, interruptible);
         }
+        return cancelAcquire(node, false, interruptible);
     }
 
+    private void cleanQueue() {}
+
+    private int cancelAcquire(Node node, boolean interrupted, boolean interruptible) { return 0; }
 
     // Main exported methods
     protected boolean tryAcquire(int arg) { throw new UnsupportedOperationException(); }
