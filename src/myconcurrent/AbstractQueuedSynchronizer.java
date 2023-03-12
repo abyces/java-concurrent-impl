@@ -17,8 +17,8 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
     public final void acquire(int arg) {
         Thread current = Thread.currentThread();
         boolean isEnqueued = false, acquired = false;
-
         for (;;) {
+            System.out.println(Thread.currentThread() + " try acquiring...");
             acquired = tryAcquire(arg);
             if (acquired) {
                 break;
@@ -27,7 +27,8 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
                     waiters.offer(current);
                     isEnqueued = true;
                 }
-                LockSupport.park();
+                LockSupport.park(this);
+                System.out.println(Thread.currentThread() + " parked...");
             }
         }
         waiters.remove(current);
@@ -35,6 +36,7 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
 
     public final boolean release(int arg) {
         if (tryRelease(arg)) {
+            System.out.println(Thread.currentThread() + " releasing lock, current waiters: " + waiters.toString());
             waiters.forEach(LockSupport::unpark);
             return true;
         }
@@ -54,6 +56,13 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
     }
     protected final boolean compareAndSetState(int expect, int update) {
         return state.compareAndSet(expect, update);
+    }
+
+    public final boolean hasQueuedPredecessors(Thread thread) {
+        if (!waiters.isEmpty() && waiters.peek() != thread) {
+            return true;
+        }
+        return false;
     }
 
 }
