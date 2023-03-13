@@ -8,7 +8,6 @@ public class Semaphore {
 
         public Sync(int permits) {
             setState(permits);
-            System.out.println("init: permit = " + getPermits());
         }
 
         final int getPermits() {
@@ -28,24 +27,18 @@ public class Semaphore {
 
         @Override
         protected boolean tryReleaseShared(int releases) {
+            // 源码检查了overflow: curState + releases < curState
             while (true) {
                 int currentState = getState();
-
-                // check overflow
-                // curState + releases < curState
-
                 if (compareAndSetState(currentState, currentState + releases))
                     return true;
             }
         }
 
         final void reducePermits(int reductions) {
+            // 源码检查了underflow: curState - reductions > curState
             while (true) {
                 int currentState = getState();
-
-                // check underflow
-                // currentState - reductions > currentState
-
                 if (compareAndSetState(currentState, currentState - reductions))
                     return;
             }

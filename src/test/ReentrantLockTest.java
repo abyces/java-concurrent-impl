@@ -9,7 +9,7 @@ class ReentrantLockTest {
     int a = 0;
 
     @Test
-    public void doTest() {
+    public void testLock() {
         ReentrantLock lock = new ReentrantLock();
 
         Thread t1 = new Thread(() -> adding(lock));
