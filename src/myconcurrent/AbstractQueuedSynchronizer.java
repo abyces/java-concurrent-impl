@@ -14,12 +14,15 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
         waiters = new ArrayBlockingQueue<>(10);
     }
 
-    public final void acquire(int arg) {
+    public final void acquire(int acquires, boolean shared) {
         Thread current = Thread.currentThread();
         boolean isEnqueued = false, acquired = false;
         for (;;) {
             System.out.println(Thread.currentThread() + " try acquiring...");
-            acquired = tryAcquire(arg);
+            if (shared)
+                acquired = tryAcquireShared(acquires) >= 0;
+            else
+                acquired = tryAcquire(acquires);
             if (acquired) {
                 break;
             } else {
@@ -34,19 +37,35 @@ public abstract class AbstractQueuedSynchronizer extends AbstractOwnableSynchron
         waiters.remove(current);
     }
 
-    public final boolean release(int arg) {
-        if (tryRelease(arg)) {
+    public final boolean release(int releases) {
+        if (tryRelease(releases)) {
             System.out.println(Thread.currentThread() + " releasing lock, current waiters: " + waiters.toString());
+            // signalNext()
             waiters.forEach(LockSupport::unpark);
             return true;
         }
         return false;
     }
 
-    protected boolean tryAcquire(int arg) { throw new UnsupportedOperationException(); }
-    protected boolean tryAcquireShared(int arg) { throw new UnsupportedOperationException(); }
-    protected boolean tryRelease(int arg) { throw new UnsupportedOperationException(); }
-    protected boolean tryReleaseShared(int arg) { throw new UnsupportedOperationException(); }
+    public final void acquireShared(int acquires) {
+        if (tryAcquireShared(acquires) < 0)
+            acquire(acquires, true);
+    }
+
+    public final boolean releaseShared(int releases) {
+        if (tryReleaseShared(releases)) {
+            System.out.println(Thread.currentThread() + " releasing lock, current waiters: " + waiters.toString());
+            // signalNext()
+            waiters.forEach(LockSupport::unpark);
+            return true;
+        }
+        return false;
+    }
+
+    protected boolean tryAcquire(int acquires) { throw new UnsupportedOperationException(); }
+    protected int tryAcquireShared(int acquires) { throw new UnsupportedOperationException(); }
+    protected boolean tryRelease(int releases) { throw new UnsupportedOperationException(); }
+    protected boolean tryReleaseShared(int releases) { throw new UnsupportedOperationException(); }
 
     protected final int getState() {
         return state.get();

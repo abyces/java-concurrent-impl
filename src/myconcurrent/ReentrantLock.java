@@ -10,15 +10,15 @@ public class ReentrantLock implements Lock {
 
         final void lock() {
             if (!initialTryLock())
-                acquire(1);
+                acquire(1, false);
         }
 
         @Override
-        protected boolean tryRelease(int arg) {
+        protected boolean tryRelease(int releases) {
             if (getExclusiveOwnerThread() != Thread.currentThread())
                 throw new IllegalArgumentException();
 
-            int c = getState() - arg;
+            int c = getState() - releases;
             boolean free = (c == 0);
             if (free) {
                 setExclusiveOwnerThread(null);
@@ -45,10 +45,10 @@ public class ReentrantLock implements Lock {
         }
 
         @Override
-        protected boolean tryAcquire(int arg) {
+        protected boolean tryAcquire(int acquires) {
             if (getState() == 0 &&
                     !hasQueuedPredecessors(Thread.currentThread()) &&
-                    compareAndSetState(0, arg)) {
+                    compareAndSetState(0, acquires)) {
                 setExclusiveOwnerThread(Thread.currentThread());
                 return true;
             }
@@ -72,9 +72,9 @@ public class ReentrantLock implements Lock {
         }
 
         @Override
-        protected boolean tryAcquire(int arg) {
+        protected boolean tryAcquire(int acquires) {
             if (getState() == 0 &&
-                    compareAndSetState(0, arg)) {
+                    compareAndSetState(0, acquires)) {
                 System.out.println(Thread.currentThread() + " in tryAcquire: state is " + getState() + ", owner is " + getExclusiveOwnerThread());
                 setExclusiveOwnerThread(Thread.currentThread());
                 return true;
