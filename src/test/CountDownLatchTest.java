@@ -3,8 +3,8 @@ package test;
 import myconcurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Random;
-import java.util.stream.Stream;
 
 import static java.lang.Thread.sleep;
 import static org.junit.jupiter.api.Assertions.*;
@@ -28,7 +28,7 @@ class CountDownLatchTest {
             });
         }
 
-        Stream.of(threads).forEach(Thread::start);
+        Arrays.stream(threads).forEach(Thread::start);
         System.out.println("all started.");
         latch.await();
         System.out.println("all done.");
